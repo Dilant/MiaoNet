@@ -35,7 +35,8 @@ public sealed class CommandParser
         SafeGuard.Assert(commandText.StartsWith(CommandStructureResolver.CommandPrefix, StringComparison.Ordinal));
 
         matchedCommand = CommandStructureResolver.Resolve(
-            commandText, commandsToMatch, out int nameEnd, out IReadOnlyList<CommandArgumentInfo> parsedArgs);
+            commandText, commandsToMatch, out int nameEnd, out IReadOnlyList<CommandArgumentInfo> parsedArgs,
+            out CommandSyntax? appliedSyntax, out int appliedStart);
         commandName = commandText[CommandStructureResolver.CommandPrefix.Length..nameEnd];
         segments = null;
 
@@ -47,9 +48,13 @@ public sealed class CommandParser
             splitedArgs[i] = commandText[parsedArgs[i].Start..parsedArgs[i].End];
         segments = splitedArgs;
 
-        if (splitedArgs.Length < matchedCommand.Segments.Count)
+        // Count against the syntax the arguments were actually resolved with, which descends
+        // into subcommands; the top-level Segments list only describes the first slot.
+        int expected = appliedStart + (appliedSyntax?.Segments.Count ?? 0);
+        bool captureRest = appliedSyntax?.CaptureRest ?? false;
+        if (splitedArgs.Length < expected)
             return ParseResult.MissingArguments;
-        if (!matchedCommand.CaptureRestSegments && splitedArgs.Length > matchedCommand.Segments.Count)
+        if (!captureRest && splitedArgs.Length > expected)
             return ParseResult.TooManyArguments;
         return ParseResult.Success;
     }

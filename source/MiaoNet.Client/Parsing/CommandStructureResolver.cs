@@ -35,11 +35,28 @@ public static class CommandStructureResolver
         out int nameEnd,
         out IReadOnlyList<CommandArgumentInfo> arguments
     )
+        => Resolve(text, commands, out nameEnd, out arguments, out _, out _);
+
+    /// <summary>
+    /// As the previous overload, also reporting the deepest syntax the arguments were resolved
+    /// with and the index of the first argument that syntax governs. Subcommands descend, so this
+    /// is not always <see cref="MiaoNetCommand.Syntax"/>.
+    /// </summary>
+    public static MiaoNetCommand? Resolve(
+        string text,
+        IReadOnlyCollection<MiaoNetCommand> commands,
+        out int nameEnd,
+        out IReadOnlyList<CommandArgumentInfo> arguments,
+        out CommandSyntax? appliedSyntax,
+        out int appliedStart
+    )
     {
         if (text.Length == 0)
         {
             nameEnd = 0;
             arguments = Array.Empty<CommandArgumentInfo>();
+            appliedSyntax = null;
+            appliedStart = 0;
             return null;
         }
 
@@ -50,28 +67,12 @@ public static class CommandStructureResolver
             nameEnd = text.Length;
 
         MiaoNetCommand? command = MatchCommand(commands, text[CommandPrefix.Length..nameEnd]);
+        appliedSyntax = command?.Syntax;
+        appliedStart = 0;
         arguments = command is null
             ? Array.Empty<CommandArgumentInfo>()
-            : ResolveArguments(text, nameEnd, command.Segments, command.CaptureRestSegments);
+            : CommandSyntaxResolver.Resolve(text, nameEnd, command.Syntax, out appliedSyntax, out appliedStart);
         return command;
-    }
-
-    private static CommandArgumentInfo[] ResolveArguments(
-        string text, int contentStart, IReadOnlyList<CommandSegmentType> segments, bool captureRest
-    )
-    {
-        IReadOnlyList<CommandArgument> raw
-            = CommandArgumentSplitter.Split(text, contentStart, segments.Count, captureRest);
-
-        CommandArgumentInfo[] result = new CommandArgumentInfo[raw.Count];
-        for (int i = 0; i < raw.Count; i++)
-        {
-            bool overflow = i >= segments.Count;
-            CommandSegmentType type = overflow ? CommandSegmentType.Text : segments[i];
-            bool freeText = !overflow && type is CommandSegmentType.Text or CommandSegmentType.Emote;
-            result[i] = new CommandArgumentInfo(raw[i].Start, raw[i].End, type, freeText, overflow);
-        }
-        return result;
     }
 
     internal static int IndexOfWhitespace(string text, int start)

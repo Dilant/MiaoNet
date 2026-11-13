@@ -13,6 +13,13 @@ public sealed partial class MiaoNetCommand
 
     public bool CaptureRestSegments { get; }
 
+    /// <summary>
+    /// The argument syntax used to parse this command. Normally derived from
+    /// <see cref="Segments"/> and <see cref="CaptureRestSegments"/>; a command may instead pass
+    /// an explicit syntax to declare (nested) subcommands.
+    /// </summary>
+    public CommandSyntax Syntax { get; }
+
     /// <summary>Where the free text this command takes ends up, if it is chat at all.</summary>
     public ChatSendScope ChatSendScope { get; }
 
@@ -24,6 +31,7 @@ public sealed partial class MiaoNetCommand
         IReadOnlyList<CommandSegmentType> segments,
         bool captureRestSegments,
         ExecuteHandler onExecute,
+        CommandSyntax? syntax = null,
         ChatSendScope chatSendScope = ChatSendScope.None
     )
     {
@@ -32,6 +40,7 @@ public sealed partial class MiaoNetCommand
         Segments = segments;
         CaptureRestSegments = captureRestSegments;
         OnExecute = onExecute;
+        Syntax = syntax ?? new CommandSyntax(segments, captureRestSegments);
         ChatSendScope = chatSendScope;
 
         if (captureRestSegments && segments.Count == 0)

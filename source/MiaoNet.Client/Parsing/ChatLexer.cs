@@ -15,15 +15,18 @@ public static class ChatLexer
         List<ChatInputToken> tokens = [];
 
         if (text.Length == 0)
-            return new LexedChatInput(text, tokens, null, []);
+            return new LexedChatInput(text, tokens, null, [], null, 0);
 
         MiaoNetCommand? command = null;
         int nameEnd = 0;
         IReadOnlyList<CommandArgumentInfo> arguments = [];
+        CommandSyntax? appliedSyntax = null;
+        int appliedStart = 0;
 
         if (text[0] == CommandStructureResolver.CommandPrefix[0])
         {
-            command = CommandStructureResolver.Resolve(text, commands, out nameEnd, out arguments);
+            command = CommandStructureResolver.Resolve(
+                text, commands, out nameEnd, out arguments, out appliedSyntax, out appliedStart);
             tokens.Add(new ChatInputToken(ChatInputTokenType.CommandName, 0, nameEnd));
 
             if (command is not null)
@@ -45,7 +48,7 @@ public static class ChatLexer
             ScanFreeText(tokens, text, 0, text.Length, isEmoji);
         }
 
-        return new LexedChatInput(text, tokens, command, arguments);
+        return new LexedChatInput(text, tokens, command, arguments, appliedSyntax, appliedStart);
     }
 
     private static void LexArguments(

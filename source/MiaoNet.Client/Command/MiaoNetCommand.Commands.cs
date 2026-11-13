@@ -458,7 +458,7 @@ partial class MiaoNetCommand
     private static string? HelpCommand(Context context)
     {
         string name = context.Segments[0];
-        MiaoNetCommand? command = Commands.FirstOrDefault(c => c.Name == name || c.Aliases?.Any(a => a == name) == true);
+        MiaoNetCommand? command = CommandStructureResolver.MatchCommand(Commands, name);
 
         if (command == null)
             return PFormat.Format(CommandHelpNotFound, name);

@@ -15,16 +15,44 @@ public sealed class LexedChatInput
 
     public IReadOnlyList<CommandArgumentInfo> Arguments { get; }
 
+    /// <summary>
+    /// The deepest syntax that governs the arguments, which a subcommand descent may have
+    /// replaced. It applies from <see cref="AppliedSyntaxStart"/> on.
+    /// </summary>
+    public CommandSyntax? AppliedSyntax { get; }
+
+    /// <summary>The index in <see cref="Arguments"/> where <see cref="AppliedSyntax"/> starts.</summary>
+    public int AppliedSyntaxStart { get; }
+
     public LexedChatInput(
         string text,
         IReadOnlyList<ChatInputToken> tokens,
         MiaoNetCommand? command,
-        IReadOnlyList<CommandArgumentInfo> arguments
+        IReadOnlyList<CommandArgumentInfo> arguments,
+        CommandSyntax? appliedSyntax,
+        int appliedSyntaxStart
     )
     {
         Text = text;
         Tokens = tokens;
         Command = command;
         Arguments = arguments;
+        AppliedSyntax = appliedSyntax;
+        AppliedSyntaxStart = appliedSyntaxStart;
+    }
+
+    /// <summary>
+    /// The segment governing the argument at <paramref name="index"/>, or <see langword="null"/>
+    /// when it lies beyond the applied syntax (an overflow argument).
+    /// </summary>
+    public CommandSegment? SegmentAt(int index)
+    {
+        if (AppliedSyntax is null)
+            return null;
+
+        int local = index - AppliedSyntaxStart;
+        return local >= 0 && local < AppliedSyntax.Segments.Count
+            ? AppliedSyntax.Segments[local]
+            : null;
     }
 }

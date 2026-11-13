@@ -118,13 +118,27 @@ public sealed class ChatCompletionProvider : ICompletionProvider
             return null;
         int remove = endsWithSpace ? 0 : lexed.Arguments[index].Length;
 
-        if (index >= lexed.Command.Segments.Count)
-            return []; // an argument beyond the declared segments: no completion
+        // Bound by the applied syntax, not the command's top-level Segments: a subcommand
+        // descent moves the governing slots further down.
+        CommandSegment? segment = lexed.SegmentAt(index);
+        if (segment is null)
+            return []; // an argument beyond the applied segments: no completion
 
-        CommandSegmentType segmentType = lexed.Command.Segments[index];
+        CommandSegmentType segmentType = segment.Type;
         string part = endsWithSpace
             ? string.Empty
             : input[lexed.Arguments[index].Start..lexed.Arguments[index].End];
+
+        // A slot that selects a subcommand completes the declared subcommand names rather than
+        // top-level command names.
+        IReadOnlyList<string>? subcommands = null;
+        if (endsWithSpace)
+            subcommands = segment.Subcommands?.Keys.ToList();
+        else if (index < lexed.Arguments.Count)
+            subcommands = lexed.Arguments[index].Subcommands;
+        if (subcommands is not null)
+            return GetSubcommandNameCompletions(subcommands, part, remove);
+
         var state = context.ClientState!;
 
         switch (segmentType)
@@ -132,7 +146,8 @@ public sealed class ChatCompletionProvider : ICompletionProvider
         case CommandSegmentType.Player:
         case CommandSegmentType.PlayerSameChannel:
         case CommandSegmentType.PlayerSameMap:
-            return GetPlayerNameCompletions(CommandSegmentResolver.ResolvePlayers(state, segmentType.ToPlayerScope()), part);
+            return GetPlayerNameCompletions(
+                CommandSegmentResolver.ResolvePlayers(state, segmentType.ToPlayerScope()), part);
         case CommandSegmentType.Channel:
         case CommandSegmentType.ChannelOrNew:
             return from c in CommandSegmentResolver.ResolveChannels(state)
@@ -149,6 +164,12 @@ public sealed class ChatCompletionProvider : ICompletionProvider
             return null;
         }
     }
+
+    private static IEnumerable<Completion> GetSubcommandNameCompletions(
+        IReadOnlyList<string> names, string part, int remove)
+        => from name in names
+           where name.Contains(part, sc)
+           select new Completion(name, name, remove);
 
     private static IEnumerable<Completion>? GetPlayerNameCompletions(IEnumerable<OnlinePlayer> players, string part)
         => from p in players

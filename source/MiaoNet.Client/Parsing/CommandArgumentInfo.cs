@@ -5,6 +5,8 @@ public readonly record struct CommandArgumentInfo(
     int End,
     CommandSegmentType SegmentType,
     bool FreeText,
+    bool IsSubcommandSelector,
+    IReadOnlyList<string>? Subcommands,
     bool IsOverflow = false
 )
 {
