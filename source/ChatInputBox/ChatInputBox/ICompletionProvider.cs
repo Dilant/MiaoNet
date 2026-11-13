@@ -11,5 +11,5 @@ public interface ICompletionProvider
     /// </summary>
     public int Version { get; }
 
-    public IEnumerable<Completion>? GetCompletions(string input);
+    public IEnumerable<Completion>? GetCompletions(string text, int caret);
 }

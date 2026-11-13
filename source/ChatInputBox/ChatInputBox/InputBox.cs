@@ -86,7 +86,7 @@ public sealed class InputBox
 
     private void RefreshCompletions()
     {
-        completions = completionProvider.GetCompletions(buffer.TextBeforeCaret)?.ToList();
+        completions = completionProvider.GetCompletions(buffer.Text, buffer.CaretPosition)?.ToList();
         completionsVersion = completionProvider.Version;
         selectedCompletionIndex = -1;
         completionScroll = 0;
@@ -179,7 +179,7 @@ public sealed class InputBox
                 bool keepMenuClosed = selected.ShouldCloseMenu || !buffer.TextAfterCaret.All(char.IsWhiteSpace);
                 if (keepMenuClosed)
                     SetSuppressCompletions();
-                buffer.DoCompletion(selected.Remove, selected.Content, selected.Separator, MaxTextLength);
+                buffer.DoCompletion(selected.Remove, selected.RemoveRight, selected.Content, selected.Separator, MaxTextLength);
             }
         }
 

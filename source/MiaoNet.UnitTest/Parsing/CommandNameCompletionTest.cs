@@ -23,8 +23,8 @@ public class CommandNameCompletionTest
         CmdPing, CmdAtlas, CmdXray, CmdYellow
     ];
 
-    private static (string Display, string Content)[] Complete(string fragment)
-        => CommandNameCompletion.Complete(Fixture, fragment)
+    private static (string Display, string Content)[] Complete(string fragment, IReadOnlyCollection<MiaoNetCommand>? commands = null)
+        => CommandNameCompletion.Complete(commands ?? Fixture, fragment, string.Empty, 0)
             .Select(c => (c.Display, c.Content))
             .ToArray();
 
@@ -110,9 +110,7 @@ public class CommandNameCompletionTest
     {
         // "/w": the name "unwatch" and both aliases match in the middle.
         var unwatch = new MiaoNetCommand("unwatch", ["uw", "uwt"], [], false, null!);
-        var completions = CommandNameCompletion.Complete(new[] { unwatch }, "w")
-            .Select(c => (c.Display, c.Content))
-            .ToArray();
+        var completions = Complete("w", new[] { unwatch });
         CollectionAssert.AreEqual(new[] { ("unwatch (uw, uwt)", "unwatch") }, completions);
     }
 
@@ -120,7 +118,7 @@ public class CommandNameCompletionTest
     public void Matches_CoverEveryHighlightedOccurrenceInDisplay()
     {
         var unwatch = new MiaoNetCommand("unwatch", ["uw", "uwt"], [], false, null!);
-        var completion = CommandNameCompletion.Complete([unwatch], "w")[0];
+        var completion = CommandNameCompletion.Complete([unwatch], "w", string.Empty, 0)[0];
 
         CollectionAssert.AreEqual(
             new[] { (2, 1), (10, 1), (14, 1) },
@@ -131,7 +129,7 @@ public class CommandNameCompletionTest
     private static string Accept(string text, int remove, string content)
     {
         var buffer = new TextBuffer("/" + text);
-        buffer.DoCompletion(remove, content, ' ', maxTextLength: 64);
+        buffer.DoCompletion(remove, 0, content, ' ', maxTextLength: 64);
         return buffer.Text;
     }
 
@@ -167,9 +165,27 @@ public class CommandNameCompletionTest
     public void Accept_PlacesCaretAfterSeparator()
     {
         var buffer = new TextBuffer("/jo");
-        buffer.DoCompletion(2, "join", ' ', maxTextLength: 64);
+        buffer.DoCompletion(2, 0, "join", ' ', maxTextLength: 64);
 
         Assert.AreEqual("/join ", buffer.Text);
         Assert.AreEqual(buffer.Text.Length, buffer.CaretPosition);
+    }
+
+    [TestMethod]
+    public void MidName_CaretInside_RequiresBothSides()
+    {
+        // "/ch|annel": left "ch", right "annel" -> channel still matches.
+        var completions = CommandNameCompletion.Complete(Fixture, "ch", "annel", 6);
+
+        Assert.AreEqual("channel", completions[0].Content);
+        Assert.AreEqual(2, completions[0].Remove);
+        Assert.AreEqual(6, completions[0].RemoveRight);
+    }
+
+    [TestMethod]
+    public void MidName_RightSideDoesNotMatch_NotOffered()
+    {
+        // "/ch|xyz": left "ch" matches channel, but "xyz" does not follow it.
+        Assert.IsEmpty(CommandNameCompletion.Complete(Fixture, "ch", "xyz", 3));
     }
 }

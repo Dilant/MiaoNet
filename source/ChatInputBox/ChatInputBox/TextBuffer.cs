@@ -77,23 +77,24 @@ public sealed class TextBuffer
         return false;
     }
 
-    public void DoCompletion(int remove, string text, char separator, int maxTextLength)
+    public void DoCompletion(int remove, int removeRight, string text, char separator, int maxTextLength)
     {
         int start = CaretPosition - remove;
-        string afterCaret = TextAfterCaret;
+        int end = Math.Clamp(CaretPosition + removeRight, start, Text.Length);
+        string afterToken = Text[end..];
 
-        // Reuse the separator already after the caret instead of inserting a duplicate one.
-        bool sameSeparator = afterCaret.Length > 0 && afterCaret[0] == separator;
-        bool whitespaceSeparator = afterCaret.Length > 0 &&
-            char.IsWhiteSpace(separator) && char.IsWhiteSpace(afterCaret[0]);
+        // Reuse an existing separator after the token instead of inserting a duplicate.
+        bool sameSeparator = afterToken.Length > 0 && afterToken[0] == separator;
+        bool whitespaceSeparator = afterToken.Length > 0 &&
+            char.IsWhiteSpace(separator) && char.IsWhiteSpace(afterToken[0]);
         bool separatorExists = sameSeparator || whitespaceSeparator;
 
         string inserted = separatorExists ? text : text + separator;
-        int available = maxTextLength - (Text.Length - remove);
+        int available = maxTextLength - (Text.Length - (end - start));
         if (inserted.Length > available)
             inserted = inserted[..Math.Max(0, available)];
 
-        Text = string.Concat(Text.AsSpan(0, start), inserted, afterCaret);
+        Text = string.Concat(Text.AsSpan(0, start), inserted, Text.AsSpan(end));
         // Land the caret past the separator, as if the user had typed it.
         SetCaretPositionAndClamp(start + inserted.Length + (separatorExists ? 1 : 0));
     }

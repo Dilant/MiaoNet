@@ -74,7 +74,7 @@ public static class CommandStructureResolver
         return result;
     }
 
-    private static int IndexOfWhitespace(string text, int start)
+    internal static int IndexOfWhitespace(string text, int start)
     {
         for (int i = start; i < text.Length; i++)
         {

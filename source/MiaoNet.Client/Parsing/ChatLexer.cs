@@ -15,7 +15,7 @@ public static class ChatLexer
         List<ChatInputToken> tokens = [];
 
         if (text.Length == 0)
-            return new LexedChatInput(text, tokens, null, 0, []);
+            return new LexedChatInput(text, tokens, null, []);
 
         MiaoNetCommand? command = null;
         int nameEnd = 0;
@@ -45,7 +45,7 @@ public static class ChatLexer
             ScanFreeText(tokens, text, 0, text.Length, isEmoji);
         }
 
-        return new LexedChatInput(text, tokens, command, nameEnd, arguments);
+        return new LexedChatInput(text, tokens, command, arguments);
     }
 
     private static void LexArguments(

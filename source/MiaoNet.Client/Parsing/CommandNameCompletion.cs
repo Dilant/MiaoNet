@@ -9,15 +9,17 @@ namespace Celeste.Mod.MiaoNet;
 /// </remarks>
 public static class CommandNameCompletion
 {
+    /// <param name="left">The typed name before the caret.</param>
+    /// <param name="right">The rest of the name after the caret, so the caret can be mid-name.</param>
     public static IReadOnlyList<Completion> Complete(
-        IReadOnlyCollection<MiaoNetCommand> commands, string fragment
+        IReadOnlyCollection<MiaoNetCommand> commands, string left, string right, int removeRight
     )
     {
         List<(Completion Completion, int Rank)> matches = [];
         foreach (MiaoNetCommand command in commands)
         {
-            if (TryMatch(command, fragment, out CommandNameMatch match))
-                matches.Add((Build(command, match.Spelling, fragment), match.Rank));
+            if (TryMatch(command, left, right, out CommandNameMatch match))
+                matches.Add((Build(command, match.Spelling, left, removeRight), match.Rank));
         }
 
         // OrderBy is stable, so equal ranks keep declaration order.
@@ -28,12 +30,12 @@ public static class CommandNameCompletion
     }
 
     private static bool TryMatch(
-        MiaoNetCommand command, string fragment, out CommandNameMatch best)
+        MiaoNetCommand command, string left, string right, out CommandNameMatch best)
     {
         best = default;
         bool found = false;
 
-        if (TryMatchTarget(command.Name, fragment, out int quality))
+        if (TryMatchTarget(command.Name, left, right, out int quality))
         {
             best = new CommandNameMatch(command.Name, Rank(quality, isAlias: false));
             found = true;
@@ -43,7 +45,7 @@ public static class CommandNameCompletion
         {
             foreach (string alias in command.Aliases)
             {
-                if (!TryMatchTarget(alias, fragment, out quality))
+                if (!TryMatchTarget(alias, left, right, out quality))
                     continue;
                 int rank = Rank(quality, isAlias: true);
                 if (!found || rank < best.Rank)
@@ -61,25 +63,43 @@ public static class CommandNameCompletion
     // aliases keep declaration order.
     private static int Rank(int quality, bool isAlias) => (quality * 2) + (isAlias ? 1 : 0);
 
-    private static bool TryMatchTarget(string target, string fragment, out int quality)
+    private static bool TryMatchTarget(string target, string left, string right, out int quality)
     {
-        int index = target.IndexOf(fragment, StringComparison.OrdinalIgnoreCase);
+        int index = target.IndexOf(left, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            quality = 0;
+            return false;
+        }
+
+        // The text after the caret must still follow the matched part, so a candidate that
+        // doesn't contain it is not offered (e.g. "/ch|xyz" does not offer "channel").
+        if (right.Length > 0 && target.IndexOf(right, index + left.Length, StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            quality = 0;
+            return false;
+        }
+
         quality = index == 0 ? 0 : 1;
-        return index >= 0;
+        return true;
     }
 
-    private static Completion Build(MiaoNetCommand command, string content, string fragment)
-        => new(content, Display(command, fragment), fragment.Length, match: fragment);
+    private static Completion Build(
+        MiaoNetCommand command, string content, string left, int removeRight)
+        => new(
+            content, Display(command, left), left.Length,
+            shouldCloseMenu: false, removeRight: removeRight, match: left
+        );
 
-    private static string Display(MiaoNetCommand command, string fragment)
+    private static string Display(MiaoNetCommand command, string left)
     {
         // Show the aliases that matched (prefix or inner), so "/w" offers "unwatch (uw, uwt)".
         List<string> matchedAliases = [];
-        if (fragment.Length > 0 && command.Aliases is not null)
+        if (left.Length > 0 && command.Aliases is not null)
         {
             foreach (string alias in command.Aliases)
             {
-                if (alias.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+                if (alias.Contains(left, StringComparison.OrdinalIgnoreCase))
                     matchedAliases.Add(alias);
             }
         }

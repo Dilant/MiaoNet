@@ -6,7 +6,7 @@ public class TestCompletionProvider : ICompletionProvider
 {
     public int Version => 0;
 
-    public IEnumerable<Completion> GetCompletions(string input)
+    public IEnumerable<Completion> GetCompletions(string text, int caret)
     {
         return ((List<string>)["some", "completions", "here"]).Select(s => new Completion(s, s, 0));
     }

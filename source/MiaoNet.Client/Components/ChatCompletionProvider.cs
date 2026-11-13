@@ -21,22 +21,24 @@ public sealed class ChatCompletionProvider : ICompletionProvider
     // The roster version alone misses a chat-channel switch, which changes the mention scope.
     public int Version => HashCode.Combine(inputState.Version, inputState.ChatChannel);
 
-    public IEnumerable<Completion>? GetCompletions(string input)
+    public IEnumerable<Completion>? GetCompletions(string text, int caret)
     {
         if (context.ClientState is null)
             return null;
 
+        string before = text[..caret];
+
         // Command arguments complete from the raw input: Emoji.Apply would mangle a typed value
         // that looks like ":emoji:" (e.g. a player named ":glad:glad:glad:") and hide its candidates.
-        IEnumerable<Completion>? completions = GetCommandCompletions(input);
+        IEnumerable<Completion>? completions = GetCommandCompletions(text, caret);
         if (completions is not null)
             return completions;
 
         // A "@..." word completes players, and may at the same time be an emoji context (a
         // following ":"), in which case both are offered with players first.
-        ChatChannel? reach = ChatScopeResolver.ResolveMentionReach(input, parser, inputState.ChatChannel);
-        IEnumerable<Completion>? mentions = GetMentionCompletions(input, reach);
-        IEnumerable<Completion>? emojis = GetEmojiCompletions(Emoji.Apply(input));
+        ChatChannel? reach = ChatScopeResolver.ResolveMentionReach(text, parser, inputState.ChatChannel);
+        IEnumerable<Completion>? mentions = GetMentionCompletions(before, reach);
+        IEnumerable<Completion>? emojis = GetEmojiCompletions(Emoji.Apply(before));
 
         if (mentions is not null && emojis is not null)
             return mentions.Concat(emojis);
@@ -91,17 +93,23 @@ public sealed class ChatCompletionProvider : ICompletionProvider
                );
     }
 
-    private IEnumerable<Completion>? GetCommandCompletions(string input)
+    private IEnumerable<Completion>? GetCommandCompletions(string text, int caret)
     {
-        if (!input.StartsWith('/'))
+        if (text.Length == 0 || text[0] != '/')
             return null;
 
-        LexedChatInput lexed = ChatLexer.Lex(input, parser.Commands, static _ => false);
+        int nameEnd = CommandStructureResolver.IndexOfWhitespace(text, 1);
+        if (nameEnd == -1)
+            nameEnd = text.Length;
+
+        // The caret can be inside the command name, in which case the text after it belongs to
+        // the same name and is replaced along with the part before it.
+        if (caret <= nameEnd)
+            return CommandNameCompletion.Complete(parser.Commands, text[1..caret], text[caret..nameEnd], nameEnd - caret);
+
+        string input = text[..caret];
         bool endsWithSpace = input.Length > 0 && char.IsWhiteSpace(input[^1]);
-
-        if (lexed.NameEnd == input.Length)
-            return CommandNameCompletion.Complete(parser.Commands, input[1..lexed.NameEnd]);
-
+        LexedChatInput lexed = ChatLexer.Lex(input, parser.Commands, static _ => false);
         if (lexed.Command is null)
             return null;
 
@@ -132,7 +140,7 @@ public sealed class ChatCompletionProvider : ICompletionProvider
                    where name.Contains(part, sc)
                    select new Completion(name, name, remove, match: part);
         case CommandSegmentType.CommandName:
-            return CommandNameCompletion.Complete(parser.Commands, part);
+            return CommandNameCompletion.Complete(parser.Commands, part, string.Empty, 0);
         case CommandSegmentType.ChatChannelType:
             return from n in ChatChannelMatcher.Names
                    where n.Contains(part, sc)
