@@ -336,13 +336,17 @@ public sealed class InputBox
             const float CompletionsPadding = 4f;
             Vector2 cBaseLoc = new Vector2(textBaseLoc.X + caretWidth, caretLineTop - Padding);
             Vector2 cTextBaseLoc = cBaseLoc + new Vector2(CompletionsPadding, -CompletionsPadding);
+
+            // Lay every candidate out once per frame; the width and the draw below reuse it.
+            ILiteralTextLayout[] completionLayouts = new ILiteralTextLayout[completions.Count];
             float width = 0f;
-            float totalHeight = textRenderer.LineHeight * completions.Count;
-            foreach (var item in completions)
+            for (int i = 0; i < completions.Count; i++)
             {
-                Vector2 size = textRenderer.Measure(item.Display);
-                width = Math.Max(width, size.X);
+                completionLayouts[i] = textRenderer.LayoutLiteral(completions[i].Display);
+                width = Math.Max(width, completionLayouts[i].Size.X);
             }
+
+            float totalHeight = lineHeight * completions.Count;
             float cX = cBaseLoc.X;
             float cY = cBaseLoc.Y - totalHeight - CompletionsPadding * 2f;
             float cW = width + CompletionsPadding * 2f;
@@ -358,14 +362,17 @@ public sealed class InputBox
                 if (selected)
                 {
                     float sX = cBaseLoc.X;
-                    float sY = curY - textRenderer.LineHeight;
+                    float sY = curY - lineHeight;
                     float sW = cW;
-                    float sH = textRenderer.LineHeight;
+                    float sH = lineHeight;
                     Draw.Rect(sX, sY, sW, sH, Color.Wheat * (0x22 / 255f));
                     Draw.Rect(sX - 3f, sY, 3f, sH, Color.Wheat);
                 }
-                textRenderer.Draw(completions[i].Display, new Vector2(cTextBaseLoc.X, curY), Vector2.UnitY, c);
-                curY -= textRenderer.LineHeight;
+
+                Completion item = completions[i];
+                Vector2 itemPos = new(cTextBaseLoc.X, curY - lineHeight);
+                completionLayouts[i].Draw(itemPos, 0, item.Display.Length, 0f, c);
+                curY -= lineHeight;
             }
         }
     }
