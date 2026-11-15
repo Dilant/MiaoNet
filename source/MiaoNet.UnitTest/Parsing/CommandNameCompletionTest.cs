@@ -116,6 +116,18 @@ public class CommandNameCompletionTest
         CollectionAssert.AreEqual(new[] { ("unwatch (uw, uwt)", "unwatch") }, completions);
     }
 
+    [TestMethod]
+    public void Matches_CoverEveryHighlightedOccurrenceInDisplay()
+    {
+        var unwatch = new MiaoNetCommand("unwatch", ["uw", "uwt"], [], false, null!);
+        var completion = CommandNameCompletion.Complete([unwatch], "w")[0];
+
+        CollectionAssert.AreEqual(
+            new[] { (2, 1), (10, 1), (14, 1) },
+            completion.Matches.Select(m => (m.Start, m.Length)).ToArray()
+        );
+    }
+
     private static string Accept(string text, int remove, string content)
     {
         var buffer = new TextBuffer("/" + text);

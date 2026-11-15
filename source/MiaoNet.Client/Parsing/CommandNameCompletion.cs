@@ -69,7 +69,7 @@ public static class CommandNameCompletion
     }
 
     private static Completion Build(MiaoNetCommand command, string content, string fragment)
-        => new(content, Display(command, fragment), fragment.Length);
+        => new(content, Display(command, fragment), fragment.Length, match: fragment);
 
     private static string Display(MiaoNetCommand command, string fragment)
     {

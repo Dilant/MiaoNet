@@ -49,7 +49,7 @@ public sealed class ChatCompletionProvider : ICompletionProvider
         return from p in state.AllPlayers
                let name = p.Info.Name
                where name.Contains(partial, sc)
-               select new Completion(name, name, remove);
+               select new Completion(name, name, remove, match: partial);
 
         int FindMentionStartAtEnd(string text)
         {
@@ -81,7 +81,10 @@ public sealed class ChatCompletionProvider : ICompletionProvider
         return from e in Emoji.Registered
                where !e.StartsWith('\0')
                where e.Contains(afterColon, StringComparison.OrdinalIgnoreCase)
-               select new Completion(e, $"{(char)(Emoji.Get(e) + Emoji.Start)} {e}", remove, ':', shouldCloseMenu: true);
+               select new Completion(
+                   e, $"{(char)(Emoji.Get(e) + Emoji.Start)} {e}", remove,
+                   ':', shouldCloseMenu: true, match: afterColon
+               );
     }
 
     private IEnumerable<Completion>? GetCommandCompletions(string input)
@@ -123,13 +126,13 @@ public sealed class ChatCompletionProvider : ICompletionProvider
             return from c in CommandSegmentResolver.ResolveChannels(state)
                    let name = c.Info.Name
                    where name.Contains(part, sc)
-                   select new Completion(name, name, remove);
+                   select new Completion(name, name, remove, match: part);
         case CommandSegmentType.CommandName:
             return CommandNameCompletion.Complete(parser.Commands, part);
         case CommandSegmentType.ChatChannelType:
             return from n in ChatChannelMatcher.Names
                    where n.Contains(part, sc)
-                   select new Completion(n, n, remove);
+                   select new Completion(n, n, remove, match: part);
         default:
             return null;
         }
@@ -139,5 +142,5 @@ public sealed class ChatCompletionProvider : ICompletionProvider
         => from p in players
            let i = p.Info
            where i.Name.Contains(part, sc)
-           select new Completion(i.Name, i.DisplayName, part.Length);
+           select new Completion(i.Name, i.DisplayName, part.Length, match: part);
 }

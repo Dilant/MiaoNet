@@ -371,9 +371,31 @@ public sealed class InputBox
 
                 Completion item = completions[i];
                 Vector2 itemPos = new(cTextBaseLoc.X, curY - lineHeight);
-                completionLayouts[i].Draw(itemPos, 0, item.Display.Length, 0f, c);
+                completionLayouts[i].Draw(itemPos, 0, item.Display.Length, 0f, CompletionRuns(item, c));
                 curY -= lineHeight;
             }
         }
+    }
+
+    private static readonly Color CompletionMatchColor = Color.Cyan;
+
+    // Paints the gaps between matches in the row colour and the matches themselves differently.
+    private static IReadOnlyList<ColoredTextRange> CompletionRuns(Completion item, Color textColor)
+    {
+        if (item.Matches.Count == 0)
+            return [new ColoredTextRange(0, item.Display.Length, textColor)];
+
+        List<ColoredTextRange> runs = [];
+        int cursor = 0;
+        foreach (TextRange match in item.Matches)
+        {
+            if (match.Start > cursor)
+                runs.Add(new ColoredTextRange(cursor, match.Start - cursor, textColor));
+            runs.Add(new ColoredTextRange(match.Start, match.Length, CompletionMatchColor));
+            cursor = match.End;
+        }
+        if (cursor < item.Display.Length)
+            runs.Add(new ColoredTextRange(cursor, item.Display.Length - cursor, textColor));
+        return runs;
     }
 }
