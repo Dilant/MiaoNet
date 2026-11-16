@@ -1,3 +1,5 @@
+using MiaoNet.Shared;
+
 namespace Celeste.Mod.MiaoNet;
 
 internal sealed class MiaoNetChatInputValidityContext : IChatInputValidityContext
@@ -39,12 +41,12 @@ internal sealed class MiaoNetChatInputValidityContext : IChatInputValidityContex
             : ChatInputValidity.Invalid;
     }
 
-    public ChatInputValidity CheckMention(string name)
+    public ChatInputValidity CheckMention(string name, ChatChannel? reach)
     {
         if (!state.IsConnected)
             return ChatInputValidity.Neutral;
 
-        return state.AllPlayerNames.Contains(name)
+        return state.MentionablePlayerNames(reach).Contains(name)
             ? ChatInputValidity.Valid
             : ChatInputValidity.Invalid;
     }
@@ -94,12 +96,12 @@ internal sealed class MiaoNetChatInputValidityContext : IChatInputValidityContex
         return state.PlayerNamesInScope(scope).Any(n => n.Contains(partial, sc));
     }
 
-    public bool CanStillCompleteMention(string partial)
+    public bool CanStillCompleteMention(string partial, ChatChannel? reach)
     {
         if (!state.IsConnected)
             return true;
         const StringComparison sc = StringComparison.OrdinalIgnoreCase;
-        return state.AllPlayerNames.Any(n => n.Contains(partial, sc));
+        return state.MentionablePlayerNames(reach).Any(n => n.Contains(partial, sc));
     }
 
     public bool CanStillCompleteChannel(string partial)

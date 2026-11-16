@@ -1,3 +1,5 @@
+using ChatChannel = MiaoNet.Shared.ChatChannel;
+
 namespace Celeste.Mod.MiaoNet;
 
 public interface IChatInputValidityContext
@@ -6,7 +8,8 @@ public interface IChatInputValidityContext
 
     public ChatInputValidity CheckPlayer(string name, PlayerScope scope);
 
-    public ChatInputValidity CheckMention(string name);
+    /// <param name="reach">The channel the line will be sent to, or null when it is not chat.</param>
+    public ChatInputValidity CheckMention(string name, ChatChannel? reach);
 
     public ChatInputValidity CheckChannel(string name);
 
@@ -21,8 +24,7 @@ public interface IChatInputValidityContext
 
     public bool CanStillCompletePlayer(string partial, PlayerScope scope);
 
-    // Mentions match every player, unlike a player argument that is scoped.
-    public bool CanStillCompleteMention(string partial);
+    public bool CanStillCompleteMention(string partial, ChatChannel? reach);
 
     public bool CanStillCompleteChannel(string partial);
 

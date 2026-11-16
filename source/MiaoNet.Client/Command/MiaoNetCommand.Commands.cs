@@ -33,7 +33,8 @@ partial class MiaoNetCommand
                 aliases: null,
                 segments: [CommandSegmentType.Text],
                 captureRestSegments: true,
-                onExecute: new ExecuteHandler(Say)
+                onExecute: new ExecuteHandler(Say),
+                chatSendScope: ChatSendScope.Current
             ),
             new MiaoNetCommand(
                 name: "emote",
@@ -125,21 +126,24 @@ partial class MiaoNetCommand
                 aliases: [ "mc" ],
                 segments: [CommandSegmentType.Text],
                 captureRestSegments: true,
-                onExecute: new ExecuteHandler(MapChat)
+                onExecute: new ExecuteHandler(MapChat),
+                chatSendScope: ChatSendScope.Map
             ),
             new MiaoNetCommand(
                 name: "channel-chat",
                 aliases: [ "cc" ],
                 segments: [CommandSegmentType.Text],
                 captureRestSegments: true,
-                onExecute: new ExecuteHandler(ChannelChat)
+                onExecute: new ExecuteHandler(ChannelChat),
+                chatSendScope: ChatSendScope.Channel
             ),
             new MiaoNetCommand(
                 name: "global-chat",
                 aliases: [ "gc" ],
                 segments: [CommandSegmentType.Text],
                 captureRestSegments: true,
-                onExecute: new ExecuteHandler(GlobalChat)
+                onExecute: new ExecuteHandler(GlobalChat),
+                chatSendScope: ChatSendScope.Global
             ),
             new MiaoNetCommand(
                 name: "chat",

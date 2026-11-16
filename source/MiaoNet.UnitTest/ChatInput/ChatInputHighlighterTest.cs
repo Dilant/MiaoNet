@@ -1,5 +1,7 @@
 using Celeste.Mod.ChatInputBox;
 using Celeste.Mod.MiaoNet;
+using MiaoNet.Shared;
+using Color = Celeste.Mod.ChatInputBox.Color;
 
 namespace MiaoNet.UnitTest;
 
@@ -30,10 +32,19 @@ public class ChatInputHighlighterTest
                 ? Command
                 : (CommandNames.Contains(name) ? ChatInputValidity.Valid : ChatInputValidity.Invalid);
         public ChatInputValidity CheckPlayer(string name, PlayerScope scope) => Player;
-        public ChatInputValidity CheckMention(string name)
-            => MentionNames is null
+
+        /// <summary>When set, mention names depend on the reach instead of <see cref="MentionNames"/>.</summary>
+        public Dictionary<ChatChannel, IReadOnlySet<string>>? MentionNamesByReach;
+
+        public ChatInputValidity CheckMention(string name, ChatChannel? reach)
+        {
+            IReadOnlySet<string>? names = MentionNamesByReach is not null
+                ? (reach is { } channel && MentionNamesByReach.TryGetValue(channel, out var set) ? set : null)
+                : MentionNames;
+            return names is null
                 ? ChatInputValidity.Neutral
-                : (MentionNames.Contains(name) ? ChatInputValidity.Valid : ChatInputValidity.Invalid);
+                : (names.Contains(name) ? ChatInputValidity.Valid : ChatInputValidity.Invalid);
+        }
         public ChatInputValidity CheckChannel(string name) => Channel;
         public ChatInputValidity CheckChannelType(string name) => ChannelType;
         public ChatInputValidity CheckEmoji(string name)
@@ -51,7 +62,7 @@ public class ChatInputHighlighterTest
 
         public bool CanStillCompleteCommand(string partial) => CommandsCanComplete;
         public bool CanStillCompletePlayer(string partial, PlayerScope scope) => PlayersCanComplete;
-        public bool CanStillCompleteMention(string partial) => MentionsCanComplete;
+        public bool CanStillCompleteMention(string partial, ChatChannel? reach) => MentionsCanComplete;
         public bool CanStillCompleteChannel(string partial) => ChannelsCanComplete;
         public bool CanStillCompleteChannelType(string partial) => ChannelTypesCanComplete;
     }
@@ -60,8 +71,10 @@ public class ChatInputHighlighterTest
     {
         public bool IsConnected => true;
         public int Version { get; set; }
+        public ChatChannel ChatChannel { get; set; } = ChatChannel.Global;
         public IReadOnlyCollection<string> AllPlayerNames => [];
         public IReadOnlyCollection<string> PlayerNamesInScope(PlayerScope scope) => [];
+        public IReadOnlyCollection<string> MentionablePlayerNames(ChatChannel? reach) => [];
         public IReadOnlyCollection<string> PublicChannelNames => [];
     }
 
@@ -229,6 +242,62 @@ public class ChatInputHighlighterTest
         };
 
         Assert.AreEqual(ChatInputHighlightColors.Invalid, ColorAt(Highlight(validity, "@zzz", 4), 2));
+    }
+
+    [TestMethod]
+    public void Mention_ScopeComesFromTheTargetChatChannel()
+    {
+        // "bob" is only reachable in the map chat here, so in global chat the mention is not.
+        var validity = new FakeValidity
+        {
+            MentionNamesByReach = new()
+            {
+                [ChatChannel.Map] = new HashSet<string> { "bob" },
+                [ChatChannel.Global] = new HashSet<string>(),
+            }
+        };
+        var parser = new CommandParser(Commands);
+
+        var inMap = new ChatInputHighlighter(parser, validity, new FakeState { ChatChannel = ChatChannel.Map });
+        Assert.AreEqual(ChatInputHighlightColors.Player, ColorAt(inMap.Highlight("@bob ", 5), 1));
+
+        var inGlobal = new ChatInputHighlighter(parser, validity, new FakeState { ChatChannel = ChatChannel.Global });
+        Assert.AreNotEqual(ChatInputHighlightColors.Player, ColorAt(inGlobal.Highlight("@bob ", 5), 1));
+    }
+
+    [TestMethod]
+    public void Mention_ExplicitChatCommandOverridesTheSelectedChannel()
+    {
+        var validity = new FakeValidity
+        {
+            MentionNamesByReach = new()
+            {
+                [ChatChannel.Map] = new HashSet<string> { "bob" },
+                [ChatChannel.Global] = new HashSet<string>(),
+            }
+        };
+
+        // The selected channel is map, but "/gc" sends to global, where bob is not reachable.
+        var highlighter = new ChatInputHighlighter(
+            new CommandParser(Commands), validity, new FakeState { ChatChannel = ChatChannel.Map });
+
+        Assert.AreEqual(ChatInputHighlightColors.Player, ColorAt(highlighter.Highlight("@bob hi", 7), 1));
+        Assert.AreNotEqual(ChatInputHighlightColors.Player, ColorAt(highlighter.Highlight("/gc @bob hi", 10), 5));
+    }
+
+    [TestMethod]
+    public void ChatChannelSwitch_InvalidatesTheCache()
+    {
+        var validity = new FakeValidity { MentionNames = new HashSet<string> { "bob" } };
+        var state = new FakeState { ChatChannel = ChatChannel.Global };
+        var highlighter = new ChatInputHighlighter(new CommandParser(Commands), validity, state);
+
+        var first = highlighter.Highlight("@bob ", 5);
+
+        state.ChatChannel = ChatChannel.Map;
+        var second = highlighter.Highlight("@bob ", 5);
+
+        Assert.AreNotSame(first, second);
     }
 
     [TestMethod]

@@ -73,7 +73,7 @@ public sealed partial class ChatComponent : MiaoNetComponent
         ChatInputHighlighter highlighter = new(cmdParser, validity, state);
         inputBox = new InputBox(
             textRenderer,
-            new ChatCompletionProvider(context, cmdParser),
+            new ChatCompletionProvider(context, cmdParser, state),
             highlighter
         );
         chatMessageBox = new(textRenderer);

@@ -9,11 +9,13 @@ public sealed class ChatCompletionProvider : ICompletionProvider
 
     private readonly MiaoNetContext context;
     private readonly CommandParser parser;
+    private readonly IChatInputState inputState;
 
-    public ChatCompletionProvider(MiaoNetContext context, CommandParser parser)
+    public ChatCompletionProvider(MiaoNetContext context, CommandParser parser, IChatInputState inputState)
     {
         this.context = context;
         this.parser = parser;
+        this.inputState = inputState;
     }
 
     public IEnumerable<Completion>? GetCompletions(string input)
@@ -29,7 +31,8 @@ public sealed class ChatCompletionProvider : ICompletionProvider
 
         // A "@..." word completes players, and may at the same time be an emoji context (a
         // following ":"), in which case both are offered with players first.
-        IEnumerable<Completion>? mentions = GetMentionCompletions(input);
+        ChatChannel? reach = ChatScopeResolver.ResolveMentionReach(input, parser, inputState.ChatChannel);
+        IEnumerable<Completion>? mentions = GetMentionCompletions(input, reach);
         IEnumerable<Completion>? emojis = GetEmojiCompletions(Emoji.Apply(input));
 
         if (mentions is not null && emojis is not null)
@@ -37,7 +40,7 @@ public sealed class ChatCompletionProvider : ICompletionProvider
         return mentions ?? emojis;
     }
 
-    private IEnumerable<Completion>? GetMentionCompletions(string input)
+    private IEnumerable<Completion>? GetMentionCompletions(string input, ChatChannel? reach)
     {
         int atIndex = FindMentionStartAtEnd(input);
         if (atIndex == -1)
@@ -45,9 +48,7 @@ public sealed class ChatCompletionProvider : ICompletionProvider
 
         string partial = input[(atIndex + 1)..];
         int remove = partial.Length;
-        var state = context.ClientState!;
-        return from p in state.AllPlayers
-               let name = p.Info.Name
+        return from name in inputState.MentionablePlayerNames(reach)
                where name.Contains(partial, sc)
                select new Completion(name, name, remove, match: partial);
 

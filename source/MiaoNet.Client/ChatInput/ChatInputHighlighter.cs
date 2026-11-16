@@ -1,4 +1,5 @@
 using Celeste.Mod.ChatInputBox;
+using ChatChannel = MiaoNet.Shared.ChatChannel;
 
 namespace Celeste.Mod.MiaoNet;
 
@@ -12,6 +13,7 @@ public sealed class ChatInputHighlighter : IChatInputHighlighter
     private string? cachedText;
     private int cachedCaret;
     private int cachedVersion;
+    private ChatChannel? cachedReach;
     private IReadOnlyList<ColoredTextRange>? cachedSpans;
 
     public ChatInputHighlighter(
@@ -26,12 +28,16 @@ public sealed class ChatInputHighlighter : IChatInputHighlighter
         isEmoji = name => validity.CheckEmoji(name) == ChatInputValidity.Valid;
     }
 
-    // Cached and recomputed only when the text, caret or live state version changes.
+    // Cached and recomputed only when the text, caret, state version or target channel changes.
     public IReadOnlyList<ColoredTextRange> Highlight(string text, int caret)
     {
         int version = state.Version;
-        if (cachedSpans is not null && caret == cachedCaret && text == cachedText && version == cachedVersion)
+        ChatChannel? reach = ChatScopeResolver.ResolveMentionReach(text, parser, state.ChatChannel);
+        if (cachedSpans is not null && caret == cachedCaret && text == cachedText
+            && version == cachedVersion && reach == cachedReach)
+        {
             return cachedSpans;
+        }
 
         List<ColoredTextRange> spans = [];
         int cursor = 0;
@@ -42,7 +48,7 @@ public sealed class ChatInputHighlighter : IChatInputHighlighter
                 spans.Add(new ColoredTextRange(cursor, token.Start - cursor, ChatInputHighlightColors.Text));
 
             if (token.Length > 0)
-                AddTokenSpans(spans, text, token, caret);
+                AddTokenSpans(spans, text, token, caret, reach);
 
             if (token.End > cursor)
                 cursor = token.End;
@@ -54,27 +60,33 @@ public sealed class ChatInputHighlighter : IChatInputHighlighter
         cachedText = text;
         cachedCaret = caret;
         cachedVersion = version;
+        cachedReach = reach;
         cachedSpans = spans.AsReadOnly();
         return cachedSpans;
     }
 
-    private void AddTokenSpans(List<ColoredTextRange> spans, string text, ChatInputToken token, int caret)
+    private void AddTokenSpans(
+        List<ColoredTextRange> spans, string text, ChatInputToken token, int caret, ChatChannel? reach
+    )
     {
         if (token.Type == ChatInputTokenType.Mention)
         {
-            AddMentionSpans(spans, text, token, caret);
+            AddMentionSpans(spans, text, token, caret, reach);
             return;
         }
 
         spans.Add(new ColoredTextRange(token.Start, token.Length, GetColor(text, token, caret)));
     }
 
-    private void AddMentionSpans(List<ColoredTextRange> spans, string text, ChatInputToken token, int caret)
+    private void AddMentionSpans(
+        List<ColoredTextRange> spans, string text, ChatInputToken token, int caret, ChatChannel? reach
+    )
     {
         int start = token.Start;
         int end = token.End;
+        string name = Slice(text, token)[1..];
 
-        ChatInputValidity result = validity.CheckMention(Slice(text, token)[1..]);
+        ChatInputValidity result = validity.CheckMention(name, reach);
         if (result == ChatInputValidity.Valid)
         {
             spans.Add(new ColoredTextRange(start, token.Length, ChatInputHighlightColors.Player));
@@ -84,7 +96,7 @@ public sealed class ChatInputHighlighter : IChatInputHighlighter
         // A mention is an exact player name, so an empty roster match means no further typing
         // can rescue it. Emoji deliberately do not work this way: a lone colon is too common.
         bool doomed = result == ChatInputValidity.Invalid
-            && !validity.CanStillCompleteMention(Slice(text, token)[1..]);
+            && !validity.CanStillCompleteMention(name, reach);
         Color plain = result == ChatInputValidity.Invalid
             && (doomed || IsDelimited(text, token, caret))
             ? ChatInputHighlightColors.Invalid

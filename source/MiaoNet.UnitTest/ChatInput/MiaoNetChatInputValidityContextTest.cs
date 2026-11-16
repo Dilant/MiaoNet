@@ -1,4 +1,5 @@
 using Celeste.Mod.MiaoNet;
+using MiaoNet.Shared;
 
 namespace MiaoNet.UnitTest;
 
@@ -14,14 +15,24 @@ public class MiaoNetChatInputValidityContextTest
 
         public int Version { get; set; }
 
+        public ChatChannel ChatChannel { get; set; } = ChatChannel.Global;
+
         public IReadOnlyCollection<string> AllPlayerNames { get; set; } = [];
 
         public IReadOnlyCollection<string> PublicChannelNames { get; set; } = [];
+
+        /// <summary>Mention candidates per reach; missing entries fall back to every name.</summary>
+        public Dictionary<ChatChannel, IReadOnlyCollection<string>> Mentionable { get; } = [];
 
         public Dictionary<PlayerScope, IReadOnlyCollection<string>> PlayersInScope { get; } = [];
 
         public IReadOnlyCollection<string> PlayerNamesInScope(PlayerScope scope)
             => PlayersInScope.TryGetValue(scope, out var names) ? names : [];
+
+        public IReadOnlyCollection<string> MentionablePlayerNames(ChatChannel? reach)
+            => reach is { } channel && Mentionable.TryGetValue(channel, out var names)
+                ? names
+                : AllPlayerNames;
     }
 
     private static MiaoNetChatInputValidityContext Create(
@@ -37,7 +48,7 @@ public class MiaoNetChatInputValidityContextTest
 
         Assert.AreEqual(ChatInputValidity.Neutral, ctx.CheckPlayer("Alice", PlayerScope.Any));
         Assert.AreEqual(ChatInputValidity.Neutral, ctx.CheckChannel("main"));
-        Assert.AreEqual(ChatInputValidity.Neutral, ctx.CheckMention("Alice"));
+        Assert.AreEqual(ChatInputValidity.Neutral, ctx.CheckMention("Alice", ChatChannel.Global));
     }
 
     [TestMethod]
@@ -101,9 +112,9 @@ public class MiaoNetChatInputValidityContextTest
         var state = new FakeState { AllPlayerNames = ["Alice", "Bobby"] };
         var ctx = Create(state);
 
-        Assert.AreEqual(ChatInputValidity.Valid, ctx.CheckMention("Bobby"));
-        Assert.AreEqual(ChatInputValidity.Invalid, ctx.CheckMention("bobby"));
-        Assert.AreEqual(ChatInputValidity.Invalid, ctx.CheckMention("nobody"));
+        Assert.AreEqual(ChatInputValidity.Valid, ctx.CheckMention("Bobby", ChatChannel.Global));
+        Assert.AreEqual(ChatInputValidity.Invalid, ctx.CheckMention("bobby", ChatChannel.Global));
+        Assert.AreEqual(ChatInputValidity.Invalid, ctx.CheckMention("nobody", ChatChannel.Global));
     }
 
     [TestMethod]
@@ -135,8 +146,8 @@ public class MiaoNetChatInputValidityContextTest
         var state = new FakeState { AllPlayerNames = ["Alice", "Bobby"] };
         var ctx = Create(state);
 
-        Assert.IsTrue(ctx.CanStillCompleteMention("bob"));
-        Assert.IsFalse(ctx.CanStillCompleteMention("zed"));
+        Assert.IsTrue(ctx.CanStillCompleteMention("bob", ChatChannel.Global));
+        Assert.IsFalse(ctx.CanStillCompleteMention("zed", ChatChannel.Global));
     }
 
     [TestMethod]

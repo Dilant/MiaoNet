@@ -13,6 +13,9 @@ public sealed partial class MiaoNetCommand
 
     public bool CaptureRestSegments { get; }
 
+    /// <summary>Where the free text this command takes ends up, if it is chat at all.</summary>
+    public ChatSendScope ChatSendScope { get; }
+
     public ExecuteHandler OnExecute { get; }
 
     public MiaoNetCommand(
@@ -20,7 +23,8 @@ public sealed partial class MiaoNetCommand
         IReadOnlyList<string>? aliases,
         IReadOnlyList<CommandSegmentType> segments,
         bool captureRestSegments,
-        ExecuteHandler onExecute
+        ExecuteHandler onExecute,
+        ChatSendScope chatSendScope = ChatSendScope.None
     )
     {
         Name = name;
@@ -28,6 +32,7 @@ public sealed partial class MiaoNetCommand
         Segments = segments;
         CaptureRestSegments = captureRestSegments;
         OnExecute = onExecute;
+        ChatSendScope = chatSendScope;
 
         if (captureRestSegments && segments.Count == 0)
             throw new ArgumentException(SR.SegmentsEmptyButCapture, nameof(captureRestSegments));
