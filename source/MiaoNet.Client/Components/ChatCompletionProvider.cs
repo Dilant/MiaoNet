@@ -18,6 +18,9 @@ public sealed class ChatCompletionProvider : ICompletionProvider
         this.inputState = inputState;
     }
 
+    // The roster version alone misses a chat-channel switch, which changes the mention scope.
+    public int Version => HashCode.Combine(inputState.Version, inputState.ChatChannel);
+
     public IEnumerable<Completion>? GetCompletions(string input)
     {
         if (context.ClientState is null)

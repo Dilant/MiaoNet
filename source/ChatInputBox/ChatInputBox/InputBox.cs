@@ -31,6 +31,13 @@ public sealed class InputBox
 
     private int selectedCompletionIndex = -1;
 
+    // Index of the first visible candidate when the list is taller than the popup.
+    private int completionScroll;
+
+    // The provider version the current list was built from, so it refreshes when the
+    // candidates themselves change (and not only when the text does).
+    private int completionsVersion;
+
     private bool suppressCompletions;
 
     public string Text => buffer.Text;
@@ -74,8 +81,15 @@ public sealed class InputBox
             selectedCompletionIndex = -1;
             return;
         }
+        RefreshCompletions();
+    }
+
+    private void RefreshCompletions()
+    {
         completions = completionProvider.GetCompletions(buffer.TextBeforeCaret)?.ToList();
+        completionsVersion = completionProvider.Version;
         selectedCompletionIndex = -1;
+        completionScroll = 0;
     }
 
     public void Activate()
@@ -100,6 +114,10 @@ public sealed class InputBox
 
     public void Update()
     {
+        // The candidates can change without the text changing, so keep the open list current.
+        if (completions is not null && completionProvider.Version != completionsVersion)
+            RefreshCompletions();
+
         if (!MInput.Keyboard.CurrentState.IsKeyDown(Keys.LeftShift) &&
             !MInput.Keyboard.CurrentState.IsKeyDown(Keys.RightShift) &&
             rightButton.Pressed)
@@ -123,6 +141,7 @@ public sealed class InputBox
                 upButton.ConsumePress();
                 if (selectedCompletionIndex == -1)
                 {
+                    // Entering from the input lands on the last candidate, scrolling to it.
                     selectedCompletionIndex = completions.Count - 1;
                 }
                 else
@@ -131,6 +150,7 @@ public sealed class InputBox
                     if (selectedCompletionIndex == -1)
                         selectedCompletionIndex = completions.Count - 1;
                 }
+                ScrollSelectionIntoView();
             }
         }
         else if (downButton.Pressed)
@@ -141,12 +161,14 @@ public sealed class InputBox
                 if (selectedCompletionIndex == -1)
                 {
                     selectedCompletionIndex = 0;
+                    completionScroll = 0;
                 }
                 else
                 {
                     selectedCompletionIndex++;
                     selectedCompletionIndex %= completions.Count;
                 }
+                ScrollSelectionIntoView();
             }
         }
         else if (MInput.Keyboard.Pressed(Keys.Tab))
@@ -334,19 +356,29 @@ public sealed class InputBox
         if (HasCompletions)
         {
             const float CompletionsPadding = 4f;
+            int count = completions.Count;
+            int visibleCount = Math.Min(count, MaxVisibleCompletions);
+            int scroll = Math.Clamp(completionScroll, 0, count - visibleCount);
+            completionScroll = scroll;
+            bool hasAbove = scroll > 0;
+            bool hasBelow = scroll + visibleCount < count;
+
             Vector2 cBaseLoc = new Vector2(textBaseLoc.X + caretWidth, caretLineTop - Padding);
             Vector2 cTextBaseLoc = cBaseLoc + new Vector2(CompletionsPadding, -CompletionsPadding);
 
-            // Lay every candidate out once per frame; the width and the draw below reuse it.
-            ILiteralTextLayout[] completionLayouts = new ILiteralTextLayout[completions.Count];
+            // Lay the visible candidates out once per frame; the width and the draw below reuse it.
+            ILiteralTextLayout[] completionLayouts = new ILiteralTextLayout[visibleCount];
             float width = 0f;
-            for (int i = 0; i < completions.Count; i++)
+            for (int i = 0; i < visibleCount; i++)
             {
-                completionLayouts[i] = textRenderer.LayoutLiteral(completions[i].Display);
+                completionLayouts[i] = textRenderer.LayoutLiteral(completions[scroll + i].Display);
                 width = Math.Max(width, completionLayouts[i].Size.X);
             }
+            if (hasAbove || hasBelow)
+                width = Math.Max(width, lineHeight);
 
-            float totalHeight = lineHeight * completions.Count;
+            int rowCount = visibleCount + (hasAbove ? 1 : 0) + (hasBelow ? 1 : 0);
+            float totalHeight = lineHeight * rowCount;
             float cX = cBaseLoc.X;
             float cY = cBaseLoc.Y - totalHeight - CompletionsPadding * 2f;
             float cW = width + CompletionsPadding * 2f;
@@ -354,10 +386,21 @@ public sealed class InputBox
             Draw.Rect(cX, cY, cW, cH, Color.Black * (0xaa / 255f));
             Draw.Rect(cX, cY, cW, 1f, Color.Cyan);
             Draw.Rect(cX - 3f, cY, 3f, cH, Color.CornflowerBlue);
+
+            // Rows are drawn bottom-up, matching how the box grows away from the caret.
             float curY = cTextBaseLoc.Y;
-            for (int i = completions.Count - 1; i >= 0; i--)
+            float arrowX = cX + cW / 2f;
+
+            if (hasBelow)
             {
-                bool selected = i == selectedCompletionIndex;
+                DrawCompletionArrow(new Vector2(arrowX, curY - lineHeight / 2f), up: false, lineHeight);
+                curY -= lineHeight;
+            }
+
+            for (int i = visibleCount - 1; i >= 0; i--)
+            {
+                int index = scroll + i;
+                bool selected = index == selectedCompletionIndex;
                 Color c = selected ? Color.White : Color.LightGray;
                 if (selected)
                 {
@@ -369,15 +412,45 @@ public sealed class InputBox
                     Draw.Rect(sX - 3f, sY, 3f, sH, Color.Wheat);
                 }
 
-                Completion item = completions[i];
+                Completion item = completions[index];
                 Vector2 itemPos = new(cTextBaseLoc.X, curY - lineHeight);
                 completionLayouts[i].Draw(itemPos, 0, item.Display.Length, 0f, CompletionRuns(item, c));
                 curY -= lineHeight;
             }
+
+            if (hasAbove)
+                DrawCompletionArrow(new Vector2(arrowX, curY - lineHeight / 2f), up: true, lineHeight);
         }
     }
 
+    private const int MaxVisibleCompletions = 15;
+
     private static readonly Color CompletionMatchColor = Color.Cyan;
+
+    // A chevron drawn from lines, so it never depends on the font carrying an arrow glyph.
+    private static void DrawCompletionArrow(Vector2 center, bool up, float rowHeight)
+    {
+        float half = rowHeight * 0.25f;
+        float direction = up ? -1f : 1f;
+        Vector2 apex = center + new Vector2(0f, direction * half);
+        Vector2 left = center + new Vector2(-half, -direction * half);
+        Vector2 right = center + new Vector2(half, -direction * half);
+
+        Draw.Line(left, apex, Color.Cyan, 2f);
+        Draw.Line(apex, right, Color.Cyan, 2f);
+    }
+
+    // Keeps the selection inside the visible window as it moves.
+    private void ScrollSelectionIntoView()
+    {
+        if (selectedCompletionIndex < 0)
+            return;
+
+        if (selectedCompletionIndex < completionScroll)
+            completionScroll = selectedCompletionIndex;
+        else if (selectedCompletionIndex >= completionScroll + MaxVisibleCompletions)
+            completionScroll = selectedCompletionIndex - MaxVisibleCompletions + 1;
+    }
 
     // Paints the gaps between matches in the row colour and the matches themselves differently.
     private static IReadOnlyList<ColoredTextRange> CompletionRuns(Completion item, Color textColor)
